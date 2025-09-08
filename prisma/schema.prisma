@@ -1,0 +1,258 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  SUPER_ADMIN
+  L1_ADMIN
+  L2_ADMIN
+}
+
+enum TransactionType {
+  EARNED
+  REDEEMED
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  SMS
+  WHATSAPP
+}
+
+enum courseCategory {
+  FOREX
+  STOCKS
+  CRYPTO
+}
+
+enum DifficultyLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+model Admin {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(SUPER_ADMIN)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id              String            @id @default(uuid())
+  name            String?
+  email           String?           @unique
+  phone           String?           @unique
+  password        String?
+  otp             String?
+  isVerified      Boolean           @default(false)
+  role            Role              @default(USER)
+  coinsEarned     Int               @default(0)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  wallet          Wallet?
+  chaptersWatched chapterProgress[]
+  quizResults     QuizResult[]
+  notifications   Notification[]
+  enrolledCourses EnrolledCourse[]
+}
+
+model Wallet {
+  id           String        @id @default(uuid())
+  user         User          @relation(fields: [userId], references: [id])
+  userId       String        @unique
+  balance      Int           @default(0)
+  transactions Transaction[]
+}
+
+model Transaction {
+  id        String          @id @default(uuid())
+  wallet    Wallet          @relation(fields: [walletId], references: [id])
+  walletId  String
+  type      TransactionType
+  amount    Int
+  note      String?
+  createdAt DateTime        @default(now())
+}
+
+model Course {
+  id                String           @id @default(uuid())
+  title             String
+  description       String           @db.Text
+  overview          String           @db.Text
+  thumbnail         String
+  category          courseCategory
+  tags              String[]
+  author            String
+  price             Int? // Optional pricing for paid courses
+  difficulty        DifficultyLevel? // Course difficulty level
+  isPublished       Boolean          @default(false) // Admin can control course visibility
+  estimatedDuration Int? // Total course duration in minutes
+  chapters          Chapter[]
+  documents         Document[]
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  enrolledCourses   EnrolledCourse[]
+
+  @@index([category])
+  @@index([isPublished])
+  @@index([difficulty])
+}
+
+model EnrolledCourse {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseId  String
+  createdAt DateTime @default(now())
+}
+
+model Chapter {
+  id            String            @id @default(uuid())
+  title         String
+  description   String?           @db.Text // Optional chapter description
+  videoUrl      String? // Made optional - will be set after Mux processing
+  muxAssetId    String? // Mux asset ID for video processing
+  muxPlaybackId String? // Mux playback ID for streaming
+  videoStatus   String?           @default("pending") // pending, processing, ready, error
+  duration      Int? // Made optional, can be calculated from video
+  order         Int // Order of chapter within the course
+  course        Course            @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseId      String
+  coinValue     Int               @default(0)
+  isPublished   Boolean           @default(false) // Admin can control chapter visibility
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  progress      chapterProgress[]
+  documents     Document[]
+  quizzes       Quiz[]
+  summary       Summary?
+
+  @@unique([courseId, order]) // Ensure unique order within each course
+  @@index([courseId])
+  @@index([isPublished])
+  @@index([muxAssetId])
+}
+
+model Document {
+  id         String   @id @default(uuid())
+  title      String
+  fileUrl    String
+  fileType   String? // PDF, DOC, PPT, etc.
+  fileSize   Int? // File size in bytes
+  chapterId  String?
+  courseId   String
+  course     Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  chapter    Chapter? @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  uploadedAt DateTime @default(now())
+
+  @@index([courseId])
+  @@index([chapterId])
+}
+
+model Quiz {
+  id          String       @id @default(uuid())
+  title       String
+  chapterId   String
+  coinValue   Int          @default(0)
+  passScore   Int
+  duration    Int
+  isPublished Boolean      @default(false)
+  questions   Question[]
+  chapter     Chapter      @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  results     QuizResult[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([chapterId])
+  @@index([isPublished])
+}
+
+model Question {
+  id        String   @id @default(uuid())
+  imgUrl    String?
+  quiz      Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  quizId    String
+  text      String
+  options   Option[]
+  order     Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([quizId, order])
+  @@index([quizId])
+}
+
+model QuizResult {
+  id          String   @id @default(uuid())
+  user        User     @relation(fields: [userId], references: [id])
+  userId      String
+  quiz        Quiz     @relation(fields: [quizId], references: [id])
+  quizId      String
+  score       Int
+  passed      Boolean
+  attemptedAt DateTime @default(now())
+
+  @@unique([userId, quizId])
+  @@index([userId])
+  @@index([quizId])
+}
+
+model Option {
+  id         String   @id @default(uuid())
+  questionId String
+  text       String
+  isCorrect  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId])
+}
+
+model chapterProgress {
+  id          String   @id @default(uuid())
+  user        User     @relation(fields: [userId], references: [id])
+  userId      String
+  chapter     Chapter  @relation(fields: [chapterId], references: [id])
+  chapterId   String
+  completed   Boolean  @default(false)
+  currentTime Float    @default(0) // Current time in video playback
+  watchedAt   DateTime @default(now())
+
+  @@unique([userId, chapterId]) // Prevent duplicate progress entries
+  @@index([userId])
+  @@index([chapterId])
+}
+
+model Notification {
+  id        String              @id @default(uuid())
+  user      User                @relation(fields: [userId], references: [id])
+  userId    String
+  content   String
+  channel   NotificationChannel
+  createdAt DateTime            @default(now())
+}
+
+model Summary {
+  id        String   @id @default(uuid())
+  chapterId String   @unique
+  title     String
+  content   String   @db.Text
+  imgUrl    String
+  chapter   Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([chapterId])
+}

@@ -12,6 +12,8 @@ enum Role {
   SUPER_ADMIN
   L1_ADMIN
   L2_ADMIN
+  ORG_ADMIN
+  ORG_EMPLOYEE
 }
 
 enum TransactionType {
@@ -38,6 +40,26 @@ enum DifficultyLevel {
   ADVANCED
 }
 
+enum PlanType {
+  BASIC
+  PREMIUM
+  ENTERPRISE
+  CUSTOM
+}
+
+enum PlanStatus {
+  ACTIVE
+  INACTIVE
+  EXPIRED
+  SUSPENDED
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+  PENDING_INVITATION
+}
+
 model Admin {
   id        String   @id @default(uuid())
   name      String
@@ -48,23 +70,125 @@ model Admin {
   updatedAt DateTime @updatedAt
 }
 
+model Organization {
+  id               String             @id @default(uuid())
+  name             String
+  email            String             @unique
+  phone            String?
+  address          String?
+  website          String?
+  logo             String?
+  isActive         Boolean            @default(true)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  employees        OrganizationUser[]
+  subscriptions    Subscription[]
+  currentPlan      Subscription?      @relation("CurrentPlan", fields: [currentPlanId], references: [id])
+  currentPlanId    String?            @unique
+  invitations      Invitation[]
+
+  @@index([isActive])
+}
+
+model Plan {
+  id                String         @id @default(uuid())
+  name              String
+  description       String?        @db.Text
+  type              PlanType
+  maxEmployees      Int // Maximum number of employees allowed
+  price             Decimal        @db.Decimal(10, 2) // Monthly/yearly price
+  billingCycle      String         @default("monthly") // monthly, yearly
+  features          String[]       // Array of features included
+  isActive          Boolean        @default(true)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  subscriptions     Subscription[]
+
+  @@index([type])
+  @@index([isActive])
+}
+
+model Subscription {
+  id             String       @id @default(uuid())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+  plan           Plan         @relation(fields: [planId], references: [id])
+  planId         String
+  status         PlanStatus   @default(ACTIVE)
+  startDate      DateTime     @default(now())
+  endDate        DateTime?
+  employeeLimit  Int // Current employee limit for this subscription
+  employeeCount  Int          @default(0) // Current number of active employees
+  autoRenew      Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  currentPlan    Organization? @relation("CurrentPlan")
+
+  @@index([organizationId])
+  @@index([planId])
+  @@index([status])
+  @@index([endDate])
+}
+
 model User {
-  id              String            @id @default(uuid())
-  name            String?
-  email           String?           @unique
-  phone           String?           @unique
-  password        String?
-  otp             String?
-  isVerified      Boolean           @default(false)
-  role            Role              @default(USER)
-  coinsEarned     Int               @default(0)
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  wallet          Wallet?
-  chaptersWatched chapterProgress[]
-  quizResults     QuizResult[]
-  notifications   Notification[]
-  enrolledCourses EnrolledCourse[]
+  id                    String                @id @default(uuid())
+  name                  String?
+  email                 String?               @unique
+  phone                 String?               @unique
+  password              String?
+  otp                   String?
+  isVerified            Boolean               @default(false)
+  role                  Role                  @default(USER)
+  coinsEarned           Int                   @default(0)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  wallet                Wallet?
+  chaptersWatched       chapterProgress[]
+  quizResults           QuizResult[]
+  notifications         Notification[]
+  enrolledCourses       EnrolledCourse[]
+  organizationMembership OrganizationUser?
+  sentInvitations       Invitation[]          @relation("InvitedBy")
+  receivedInvitations   Invitation[]          @relation("InvitedUser")
+}
+
+model OrganizationUser {
+  id             String         @id @default(uuid())
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String         @unique
+  role           Role           @default(ORG_EMPLOYEE) // ORG_ADMIN or ORG_EMPLOYEE
+  status         EmployeeStatus @default(ACTIVE)
+  joinedAt       DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@unique([organizationId, userId])
+  @@index([organizationId])
+  @@index([userId])
+  @@index([status])
+}
+
+model Invitation {
+  id             String         @id @default(uuid())
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+  invitedBy      User           @relation("InvitedBy", fields: [invitedById], references: [id])
+  invitedById    String
+  invitedUser    User?          @relation("InvitedUser", fields: [invitedUserId], references: [id])
+  invitedUserId  String?
+  email          String
+  role           Role           @default(ORG_EMPLOYEE)
+  token          String         @unique // Unique invitation token
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  isAccepted     Boolean        @default(false)
+  createdAt      DateTime       @default(now())
+
+  @@index([organizationId])
+  @@index([email])
+  @@index([token])
+  @@index([expiresAt])
 }
 
 model Wallet {

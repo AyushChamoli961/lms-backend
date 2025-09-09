@@ -9,10 +9,15 @@ import quizRoutes from "./routes/quizRoutes";
 import fileUploadRoutes from "./routes/fileUploadRoutes";
 import profileRoutes from "./routes/profileRoutes";
 import walletRoutes from "./routes/walletRoutes";
-
 import userCourseRoutes from "./routes/userCourseRoutes";
 import userquizRoutes from "./routes/userQuizRoutes";
+
+// Organization routes
+import organizationController from "./routes/organisationController";
+import planRoutes from "./routes/planRoutes";
+
 import { requireAuth, requireAdmin } from "./middleware/admin";
+import { requireAuth as requireOrgAuth } from "./middleware/orgAuth";
 import cors from "cors";
 
 const app = express();
@@ -39,7 +44,11 @@ app.use("/api/auth/signin", signIn);
 app.use("/api/auth/register", register);
 app.use("/api/auth/verifyOtp", verifyOtp);
 
-// API routes
+// Organization routes
+app.use("/api/organizations", organizationController);
+app.use("/api/plans", planRoutes);
+
+// API routes (existing)
 app.use("/api/courses", requireAuth, courseRoutes);
 app.use("/api/chapters", requireAuth, chapterRoutes);
 app.use("/api/videos", videoRoutes);
@@ -61,3 +70,5 @@ app.use("/api/user/quiz", userquizRoutes);
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
+
+export default app;

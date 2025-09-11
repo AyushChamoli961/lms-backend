@@ -1,91 +1,258 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-import { Role } from "@prisma/client";
+import { db } from "../helper/db";
+import { Role, EmployeeStatus } from "@prisma/client";
+
+// Unified interface for authenticated requests
+export interface AuthedRequest extends Request {
+  user?: {
+    id: string;
+    email: string;
+    name: string;
+    role: Role;
+    organizationId?: string;
+  };
+}
 
 interface JwtPayload {
   sub: string;
-  role?: Role;
   email?: string;
   name?: string;
+  role?: Role;
+  organizationId?: string;
   iat?: number;
   exp?: number;
 }
 
-export interface AuthedRequest extends Request {
-  user?: {
-    id: string;
-    role: Role;
-    email?: string;
-    name?: string;
-    tokenPayload: JwtPayload;
-  };
-}
-
-const ADMIN_ROLES: Role[] = [
-  Role.SUPER_ADMIN,
-  Role.L1_ADMIN,
-  Role.L2_ADMIN,
-  Role.USER,
-];
-
+// Helper function to extract token
 function extractToken(req: Request): string | null {
-  const auth = req.headers.authorization;
-  if (!auth) return null;
-  const parts = auth.split(" ");
-  if (parts.length === 2 && /^Bearer$/i.test(parts[0])) return parts[1];
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return null;
+
+  const parts = authHeader.split(" ");
+  if (parts.length === 2 && /^Bearer$/i.test(parts[0])) {
+    return parts[1];
+  }
   return null;
 }
 
-export function requireAuth(
+// Basic authentication middleware
+export const requireAuth = async (
   req: AuthedRequest,
   res: Response,
   next: NextFunction
-) {
-  const token = extractToken(req);
-  if (!token)
-    return res.status(401).json({ success: false, message: "Missing token" });
-
+) => {
   try {
-    const secret = process.env.JWT_SECRET || "DEV_DUMMY_JWT_SECRET_CHANGE_ME";
-    const payload = jwt.verify(token, secret) as JwtPayload;
+    const token = extractToken(req);
 
-    if (!payload.sub) {
-      return res
-        .status(401)
-        .json({ success: false, message: "Invalid token payload" });
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication token required",
+      });
+    }
+
+    const secret = process.env.JWT_SECRET || "DEV_DUMMY_JWT_SECRET_CHANGE_ME";
+    const decoded = jwt.verify(token, secret) as JwtPayload;
+
+    console.log("JWT Payload:", decoded); // Debug log
+
+    if (!decoded.sub) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid token payload - missing user ID",
+      });
+    }
+
+    // If token has complete user info, use it directly (for organization users)
+    if (decoded.email && decoded.name) {
+      req.user = {
+        id: decoded.sub,
+        email: decoded.email,
+        name: decoded.name,
+        role: decoded.role || Role.USER,
+        organizationId: decoded.organizationId,
+      };
+
+      console.log("Using token data directly:", req.user); // Debug log
+      return next();
+    }
+
+    // Otherwise, fetch from database (for admin users)
+    const user = await db.user.findUnique({
+      where: { id: decoded.sub },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid authentication token - user not found",
+      });
+    }
+
+    // Handle null values from database
+    if (!user.email || !user.name) {
+      return res.status(401).json({
+        success: false,
+        message: "User account incomplete",
+      });
     }
 
     req.user = {
-      id: payload.sub,
-      role: (payload.role as Role) || Role.USER,
-      email: payload.email,
-      name: payload.name,
-      tokenPayload: payload,
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      organizationId: decoded.organizationId,
     };
 
-    return next();
-  } catch (e) {
-    return res
-      .status(401)
-      .json({ success: false, message: "Invalid or expired token" });
+    console.log("Using database data:", req.user); // Debug log
+    next();
+  } catch (error) {
+    console.error("Auth middleware error:", error);
+    return res.status(401).json({
+      success: false,
+      message: "Invalid authentication token",
+    });
   }
-}
+};
 
+// Organization admin middleware
+export const requireOrgAdmin = async (
+  req: AuthedRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    console.log("requireOrgAdmin - req.user:", req.user); // Debug log
+
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+    }
+
+    const organizationId = req.user.organizationId;
+
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        message: "Organization ID required",
+      });
+    }
+
+    // Check if user is organization admin
+    const orgUser = await db.organizationUser.findFirst({
+      where: {
+        organizationId,
+        userId: req.user.id,
+        role: Role.ORG_ADMIN,
+        status: EmployeeStatus.ACTIVE,
+      },
+    });
+
+    if (!orgUser) {
+      return res.status(403).json({
+        success: false,
+        message: "Organization admin access required",
+      });
+    }
+
+    req.user.organizationId = organizationId;
+    console.log("Organization admin verified:", req.user); // Debug log
+    next();
+  } catch (error) {
+    console.error("Org admin middleware error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Authorization check failed",
+    });
+  }
+};
+
+// Organization member middleware
+export const requireOrgMember = async (
+  req: AuthedRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    console.log("requireOrgMember - req.user:", req.user); // Debug log
+
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+    }
+
+     const organizationId = req.user.organizationId;
+
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        message: "Organization ID required",
+      });
+    }
+
+    // Check if user is organization member
+    const orgUser = await db.organizationUser.findFirst({
+      where: {
+        organizationId,
+        userId: req.user.id,
+        status: EmployeeStatus.ACTIVE,
+      },
+    });
+
+    if (!orgUser) {
+      return res.status(403).json({
+        success: false,
+        message: "Organization membership required",
+      });
+    }
+
+    req.user.organizationId = organizationId;
+    console.log("Organization member verified:", req.user); // Debug log
+    next();
+  } catch (error) {
+    console.error("Org member middleware error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Authorization check failed",
+    });
+  }
+};
+
+// Admin roles for backward compatibility
+const ADMIN_ROLES: Role[] = [Role.SUPER_ADMIN, Role.L1_ADMIN, Role.L2_ADMIN];
+
+// Admin middleware for existing admin functionality
 export function requireAdmin(allowedRoles: Role[] = ADMIN_ROLES) {
   return (req: AuthedRequest, res: Response, next: NextFunction) => {
     if (!req.user) {
-      return res
-        .status(500)
-        .json({ success: false, message: "Auth middleware not applied" });
+      return res.status(500).json({
+        success: false,
+        message: "Auth middleware not applied",
+      });
     }
+
     if (!allowedRoles.includes(req.user.role)) {
-      return res
-        .status(403)
-        .json({ success: false, message: "Forbidden: admin role required" });
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden: admin role required",
+      });
     }
+
     return next();
   };
 }
 
-// Optional helper for stricter tiers
+// Helper for super admin only
 export const requireSuperAdmin = requireAdmin([Role.SUPER_ADMIN]);

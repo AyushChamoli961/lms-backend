@@ -12,12 +12,24 @@ import walletRoutes from "./routes/walletRoutes";
 import userCourseRoutes from "./routes/userCourseRoutes";
 import userquizRoutes from "./routes/userQuizRoutes";
 
-// Organization routes
-import organizationController from "./routes/organisationController";
-import planRoutes from "./routes/planRoutes";
+// Organization routes - separated by permission level
+import publicOrgRoutes from "./routes/organisationRoutes";
+import orgAdminRoutes from "./routes/organisationAdminRoutes";
+import orgMemberRoutes from "./routes/organisationMember";
 
-import { requireAuth, requireAdmin } from "./middleware/admin";
-import { requireAuth as requireOrgAuth } from "./middleware/orgAuth";
+// Plan routes - separated by permission level
+import publicPlanRoutes from "./routes/planRoutes";
+import adminPlanRoutes from "./routes/planAdminRoutes";
+import certificateRoutes from "./routes/certificateRoutes";
+// Use the unified middleware
+import {
+  requireAuth,
+  requireAdmin,
+  requireSuperAdmin,
+} from "./middleware/admin";
+
+import enquiryRoutes from "./routes/enquiryRoutes";
+
 import cors from "cors";
 
 const app = express();
@@ -39,33 +51,58 @@ app.get("/", (req: Request, res: Response) => {
   res.json({ message: "Hey!, Zuperlearn Backend is Up!" });
 });
 
-// Auth routes
+// Auth routes (public)
 app.use("/api/auth/signin", signIn);
 app.use("/api/auth/register", register);
 app.use("/api/auth/verifyOtp", verifyOtp);
 
-// Organization routes
-app.use("/api/organizations", organizationController);
-app.use("/api/plans", planRoutes);
+//=======Enquiry Routes=========
+app.use("/api/enquiry", enquiryRoutes);
 
-// API routes (existing)
-app.use("/api/courses", requireAuth, courseRoutes);
-app.use("/api/chapters", requireAuth, chapterRoutes);
+// ===== ORGANIZATION ROUTES =====
+
+// Public organization routes (no auth required)
+app.use("/api/organizations/public", publicOrgRoutes);
+
+// Organization admin routes (requires auth + org admin permissions)
+app.use("/api/organizations/admin", requireAuth, orgAdminRoutes);
+
+// Organization member routes (requires auth + org member permissions)
+app.use("/api/organizations/member", requireAuth, orgMemberRoutes);
+
+// ===== PLAN ROUTES =====
+
+// Public plan routes (no auth required)
+app.use("/api/plans", publicPlanRoutes);
+
+// Admin plan routes (requires auth + admin permissions)
+app.use("/api/plans/admin", requireAuth, adminPlanRoutes);
+
+//========Certificates Routes =========
+app.use("/api/certificates", certificateRoutes);
+
+// ===== EXISTING ADMIN ROUTES =====
+// These routes require admin authentication and specific admin roles
+app.use("/api/courses", requireAuth, requireAdmin(), courseRoutes);
+app.use("/api/chapters", requireAuth, requireAdmin(), chapterRoutes);
 app.use("/api/videos", videoRoutes);
 app.use("/api/quiz", quizRoutes);
 app.use("/api/files", fileUploadRoutes);
 
-// User course routes (no admin auth required)
-app.use("/api/user", userCourseRoutes);
+// ===== USER ROUTES =====
+// These routes require basic authentication
 
-// Profile routes
-app.use("/api/user/profile", profileRoutes);
+// User course routes (protected with unified auth)
+app.use("/api/user", requireAuth, userCourseRoutes);
 
-// Wallet routes
-app.use("/api/user/wallet", walletRoutes);
+// Profile routes (protected with unified auth)
+app.use("/api/user/profile", requireAuth, profileRoutes);
 
-// User quiz routes
-app.use("/api/user/quiz", userquizRoutes);
+// Wallet routes (protected with unified auth)
+app.use("/api/user/wallet", requireAuth, walletRoutes);
+
+// User quiz routes (protected with unified auth)
+app.use("/api/user/quiz", requireAuth, userquizRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

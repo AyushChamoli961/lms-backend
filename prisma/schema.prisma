@@ -70,6 +70,8 @@ model Admin {
   updatedAt DateTime @updatedAt
 }
 
+
+
 model Organization {
   id               String             @id @default(uuid())
   name             String
@@ -106,6 +108,23 @@ model Plan {
 
   @@index([type])
   @@index([isActive])
+}
+
+model Certificate {
+  id            String   @id @default(cuid())
+  userId        String
+  courseId      String
+  certificateUrl String? // URL to the generated certificate file
+  issuedAt      DateTime @default(now())
+  completedAt   DateTime // When the course was completed
+  
+  // Relations
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course        Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  
+  // Ensure one certificate per user per course
+  @@unique([userId, courseId])
+  @@map("certificates")
 }
 
 model Subscription {
@@ -150,6 +169,7 @@ model User {
   organizationMembership OrganizationUser?
   sentInvitations       Invitation[]          @relation("InvitedBy")
   receivedInvitations   Invitation[]          @relation("InvitedUser")
+   certificates   Certificate[]
 }
 
 model OrganizationUser {
@@ -227,7 +247,7 @@ model Course {
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
   enrolledCourses   EnrolledCourse[]
-
+certificates   Certificate[]
   @@index([category])
   @@index([isPublished])
   @@index([difficulty])

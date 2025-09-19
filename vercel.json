@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "buildCommand": "npm install && prisma generate",
   "builds": [
     {
       "src": "src/index.ts",

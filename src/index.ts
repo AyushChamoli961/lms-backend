@@ -56,6 +56,7 @@ app.use("/api/auth/signin", signIn);
 app.use("/api/auth/register", register);
 app.use("/api/auth/verifyOtp", verifyOtp);
 
+
 //=======Enquiry Routes=========
 app.use("/api/enquiry", enquiryRoutes);
 

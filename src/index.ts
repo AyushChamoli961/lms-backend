@@ -38,9 +38,11 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
 app.use(
   cors({
-    origin: *,
+    origin: ["http://localhost:3000", "http://localhost:3001"],
+    credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   })
 );
@@ -54,7 +56,6 @@ app.get("/", (req: Request, res: Response) => {
 app.use("/api/auth/signin", signIn);
 app.use("/api/auth/register", register);
 app.use("/api/auth/verifyOtp", verifyOtp);
-
 
 //=======Enquiry Routes=========
 app.use("/api/enquiry", enquiryRoutes);

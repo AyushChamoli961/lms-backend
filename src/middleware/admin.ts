@@ -43,6 +43,11 @@ export const requireAuth = async (
   next: NextFunction
 ) => {
   try {
+    // Skip authentication for OPTIONS requests (CORS preflight)
+    if (req.method === "OPTIONS") {
+      return next();
+    }
+
     const token = extractToken(req);
 
     if (!token) {
@@ -130,6 +135,11 @@ export const requireOrgAdmin = async (
   next: NextFunction
 ) => {
   try {
+    // Skip authentication for OPTIONS requests (CORS preflight)
+    if (req.method === "OPTIONS") {
+      return next();
+    }
+
     console.log("requireOrgAdmin - req.user:", req.user); // Debug log
 
     if (!req.user) {
@@ -184,6 +194,10 @@ export const requireOrgMember = async (
   next: NextFunction
 ) => {
   try {
+    // Skip authentication for OPTIONS requests (CORS preflight)
+    if (req.method === "OPTIONS") {
+      return next();
+    }
     console.log("requireOrgMember - req.user:", req.user); // Debug log
 
     if (!req.user) {
@@ -236,6 +250,11 @@ const ADMIN_ROLES: Role[] = [Role.SUPER_ADMIN, Role.L1_ADMIN, Role.L2_ADMIN];
 // Admin middleware for existing admin functionality
 export function requireAdmin(allowedRoles: Role[] = ADMIN_ROLES) {
   return (req: AuthedRequest, res: Response, next: NextFunction) => {
+    // Skip authentication for OPTIONS requests (CORS preflight)
+    if (req.method === "OPTIONS") {
+      return next();
+    }
+
     if (!req.user) {
       return res.status(500).json({
         success: false,

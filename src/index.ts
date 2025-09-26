@@ -39,6 +39,37 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Global CORS headers middleware (applied before other middleware)
+app.use((req, res, next) => {
+  const allowedOrigins = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "https://lms-main-red.vercel.app",
+  ];
+
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin as string)) {
+    res.setHeader("Access-Control-Allow-Origin", origin as string);
+  }
+
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+  );
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, X-Requested-With, Accept, Origin"
+  );
+
+  // Handle preflight requests
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+
+  next();
+});
+
 app.use(
   cors({
     origin: [
@@ -48,8 +79,32 @@ app.use(
     ],
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+      "Accept",
+      "Origin",
+    ],
+    exposedHeaders: ["Content-Length", "X-Kuma-Revision"],
+    maxAge: 86400, // 24 hours
   })
 );
+
+// Handle preflight requests explicitly
+app.options("*", (req, res) => {
+  res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+  res.header(
+    "Access-Control-Allow-Methods",
+    "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+  );
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, X-Requested-With, Accept, Origin"
+  );
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.sendStatus(200);
+});
 
 // Basic route
 app.get("/", (req: Request, res: Response) => {

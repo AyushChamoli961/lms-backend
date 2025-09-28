@@ -11,12 +11,13 @@ import profileRoutes from "./routes/profileRoutes";
 import walletRoutes from "./routes/walletRoutes";
 import userCourseRoutes from "./routes/userCourseRoutes";
 import userquizRoutes from "./routes/userQuizRoutes";
-
+import summaryRoutes from "./routes/summaryRoutes";
+import { adminRoutes } from "./routes/adminUserRoutes";
 // Organization routes - separated by permission level
 import publicOrgRoutes from "./routes/organisationRoutes";
 import orgAdminRoutes from "./routes/organisationAdminRoutes";
 import orgMemberRoutes from "./routes/organisationMember";
-
+import adminOrgRoutes from "./routes/orgManagementRoutes";
 // Plan routes - separated by permission level
 import publicPlanRoutes from "./routes/planRoutes";
 import adminPlanRoutes from "./routes/planAdminRoutes";
@@ -55,8 +56,8 @@ app.get("/", (req: Request, res: Response) => {
 app.use("/api/auth/signin", signIn);
 app.use("/api/auth/register", register);
 app.use("/api/auth/verifyOtp", verifyOtp);
-
-
+app.use("/api/admin/organizations", requireAuth, adminOrgRoutes);
+app.use("/api/admin", adminRoutes);
 //=======Enquiry Routes=========
 app.use("/api/enquiry", enquiryRoutes);
 

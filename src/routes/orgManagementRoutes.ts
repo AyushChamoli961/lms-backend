@@ -12,7 +12,7 @@ const router = Router();
 
 // Get all organizations (Super Admin only)
 router.get(
-  "/organizations",
+  "/",
   requireSuperAdmin,
   async (req: AuthedRequest, res: Response) => {
     try {
@@ -134,7 +134,7 @@ router.get(
 
 // Get organization details (Admin)
 router.get(
-  "/organizations/:id",
+  "/:id",
   requireAdmin(),
   async (req: AuthedRequest, res: Response) => {
     try {
@@ -285,7 +285,7 @@ router.get(
 
 // Create organization (Super Admin only)
 router.post(
-  "/organizations",
+  "/",
   requireSuperAdmin,
   async (req: AuthedRequest, res: Response) => {
     try {
@@ -453,7 +453,7 @@ router.post(
 
 // Update organization (Admin)
 router.put(
-  "/organizations/:id",
+  "/:id",
   requireAdmin(),
   async (req: AuthedRequest, res: Response) => {
     try {
@@ -521,7 +521,7 @@ router.put(
 
 // Delete organization (Super Admin only)
 router.delete(
-  "/organizations/:id",
+  "/:id",
   requireSuperAdmin,
   async (req: AuthedRequest, res: Response) => {
     try {
@@ -577,7 +577,7 @@ router.delete(
 
 // Assign plan to organization (Super Admin only)
 router.post(
-  "/organizations/:id/assign-plan",
+  "/:id/assign-plan",
   requireSuperAdmin,
   async (req: AuthedRequest, res: Response) => {
     try {
@@ -692,7 +692,7 @@ router.post(
 
 // Get organization analytics (Admin)
 router.get(
-  "/organizations/:id/analytics",
+  "/:id/analytics",
   requireAdmin(),
   async (req: AuthedRequest, res: Response) => {
     try {

@@ -44,7 +44,7 @@ app.use(
     origin: true,
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  })
+  })
 );
 
 // Basic route

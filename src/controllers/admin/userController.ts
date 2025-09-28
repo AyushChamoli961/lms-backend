@@ -488,17 +488,32 @@ router.get("/learners", async (req: Request, res: Response) => {
             },
           },
           organizationMembership: {
-            include: {
+            select: {
+              id: true,
+              role: true,
+              status: true,
+              joinedAt: true,
               organization: {
                 select: {
                   id: true,
                   name: true,
+                  email: true,
+                  isActive: true,
+                  currentPlan: {
+                    select: {
+                      plan: {
+                        select: {
+                          name: true,
+                          type: true,
+                        },
+                      },
+                    },
+                  },
                 },
               },
             },
           },
         },
-
         orderBy: {
           createdAt: "desc",
         },

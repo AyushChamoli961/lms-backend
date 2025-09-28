@@ -5,7 +5,6 @@ import { Role, PlanStatus, EmployeeStatus } from "@prisma/client";
 import {
   AuthedRequest,
   requireAdmin,
-  requireSuperAdmin,
 } from "../middleware/admin";
 
 const router = Router();
@@ -13,7 +12,7 @@ const router = Router();
 // Get all organizations (Super Admin only)
 router.get(
   "/",
-  requireSuperAdmin,
+  requireAdmin,
   async (req: AuthedRequest, res: Response) => {
     try {
       const { page = 1, limit = 10, search, status } = req.query;
@@ -286,7 +285,7 @@ router.get(
 // Create organization (Super Admin only)
 router.post(
   "/",
-  requireSuperAdmin,
+  requireAdmin,
   async (req: AuthedRequest, res: Response) => {
     try {
       const {
@@ -522,7 +521,7 @@ router.put(
 // Delete organization (Super Admin only)
 router.delete(
   "/:id",
-  requireSuperAdmin,
+  requireAdmin,
   async (req: AuthedRequest, res: Response) => {
     try {
       const { id } = req.params;
@@ -578,7 +577,7 @@ router.delete(
 // Assign plan to organization (Super Admin only)
 router.post(
   "/:id/assign-plan",
-  requireSuperAdmin,
+  requireAdmin,
   async (req: AuthedRequest, res: Response) => {
     try {
       const { id } = req.params;

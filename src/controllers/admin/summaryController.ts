@@ -27,16 +27,16 @@ export const createSummary = async (req: Request, res: Response) => {
     }
 
     // Check if summary already exists for this chapter
-    const existingSummary = await prisma.summary.findUnique({
-      where: { chapterId },
-    });
+    // const existingSummary = await prisma.summary.findUnique({
+    //   where: { chapterId },
+    // });
 
-    if (existingSummary) {
-      return res.status(400).json({
-        success: false,
-        message: "Summary already exists for this chapter",
-      });
-    }
+    // if (existingSummary) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Summary already exists for this chapter",
+    //   });
+    // }
 
     const summary = await prisma.summary.create({
       data: {
@@ -202,7 +202,7 @@ export const getSummaryByChapterId = async (req: Request, res: Response) => {
       });
     }
 
-    const summary = await prisma.summary.findUnique({
+    const summary = await prisma.summary.findMany({
       where: { chapterId },
       include: {
         chapter: {

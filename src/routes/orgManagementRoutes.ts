@@ -2,7 +2,11 @@ import { Router, Response } from "express";
 import { db } from "../helper/db";
 import bcrypt from "bcrypt";
 import { Role, PlanStatus, EmployeeStatus } from "@prisma/client";
-import { AuthedRequest, requireAdmin, requireSuperAdmin } from "../middleware/admin";
+import {
+  AuthedRequest,
+  requireAdmin,
+  requireSuperAdmin,
+} from "../middleware/admin";
 
 const router = Router();
 
@@ -223,8 +227,6 @@ router.get("/", requireAdmin(), async (req: AuthedRequest, res: Response) => {
     });
   }
 });
-
-
 
 // Get organization details (Admin) - OPTIMIZED
 router.get(

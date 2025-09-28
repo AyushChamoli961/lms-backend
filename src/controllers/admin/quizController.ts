@@ -55,14 +55,7 @@ export const getQuizById = async (req: Request, res: Response) => {
 export const createQuiz = async (req: Request, res: Response) => {
   console.log("POST /api/quiz/quizzes called with body:", req.body);
   try {
-    const {
-      title,
-      chapterId,
-      coinValue = 0,
-      passScore,
-      duration,
-      questions = [],
-    } = req.body;
+    const { title, chapterId, passScore, duration, questions = [] } = req.body;
 
     if (!title || !chapterId || !passScore || !duration) {
       return res.status(400).json({ error: "Missing required fields" });
@@ -77,7 +70,6 @@ export const createQuiz = async (req: Request, res: Response) => {
       data: {
         title,
         chapterId,
-        coinValue,
         passScore,
         duration,
         questions: {

@@ -11,6 +11,12 @@ export const submitQuizResult = async (req: AuthedRequest, res: Response) => {
     const { score } = req.body;
     const userId = req.user?.id;
 
+    console.log("Received quiz result submission:", {
+      userId,
+      quizId,
+      score,
+    });
+
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -112,7 +118,8 @@ export const submitQuizResult = async (req: AuthedRequest, res: Response) => {
               walletId: wallet.id,
               type: "EARNED",
               amount: quiz.coinValue,
-              note: `Passed quiz: ${quiz.title}`,
+              courseName: quiz.chapter.course.title,
+              note: `Completed Chapter: ${quiz.chapter.title}`,
             },
           });
 
@@ -170,7 +177,8 @@ export const submitQuizResult = async (req: AuthedRequest, res: Response) => {
               walletId: wallet.id,
               type: "EARNED",
               amount: quiz.coinValue,
-              note: `Passed quiz: ${quiz.title}`,
+              courseName: quiz.chapter.course.title,
+              note: `Completed Chapter: ${quiz.chapter.title}`,
             },
           });
 

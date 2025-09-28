@@ -170,6 +170,7 @@ model User {
   sentInvitations       Invitation[]          @relation("InvitedBy")
   receivedInvitations   Invitation[]          @relation("InvitedUser")
    certificates   Certificate[]
+   totpSecret      String?
 }
 
 model OrganizationUser {
@@ -225,6 +226,7 @@ model Transaction {
   walletId  String
   type      TransactionType
   amount    Int
+  courseName String?
   note      String?
   createdAt DateTime        @default(now())
 }
@@ -281,7 +283,7 @@ model Chapter {
   progress      chapterProgress[]
   documents     Document[]
   quizzes       Quiz[]
-  summary       Summary?
+  summary       Summary[]
 
   @@unique([courseId, order]) // Ensure unique order within each course
   @@index([courseId])
@@ -390,7 +392,7 @@ model Notification {
 
 model Summary {
   id        String   @id @default(uuid())
-  chapterId String   @unique
+  chapterId String   
   title     String
   content   String   @db.Text
   imgUrl    String

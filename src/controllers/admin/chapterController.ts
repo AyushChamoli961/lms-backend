@@ -218,6 +218,7 @@ export const getChapterById = async (req: Request, res: Response) => {
             },
           },
         },
+        summary: true,
         _count: {
           select: {
             progress: true,

@@ -11,6 +11,7 @@ export const createCourse = async (req: Request, res: Response) => {
       overview,
       thumbnail,
       category,
+      author,
       tags,
       difficulty,
       estimatedDuration,
@@ -18,7 +19,7 @@ export const createCourse = async (req: Request, res: Response) => {
     } = req.body;
 
     // Validate required fields
-    if (!title || !description || !overview) {
+    if (!title || !description || !overview || !category || !author) {
       return res.status(400).json({
         success: false,
         message:
@@ -27,12 +28,12 @@ export const createCourse = async (req: Request, res: Response) => {
     }
 
     // Validate category enum
-    // if (!Object.values($Enums.courseCategory).includes(category)) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: "Invalid category. Must be one of: FOREX, STOCKS, CRYPTO",
-    //   });
-    // }
+    if (!Object.values($Enums.courseCategory).includes(category)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid category. Must be one of: FOREX, STOCKS, CRYPTO",
+      });
+    }
 
     // Validate difficulty enum if provided
     if (
@@ -52,6 +53,8 @@ export const createCourse = async (req: Request, res: Response) => {
         description,
         overview,
         thumbnail,
+        category,
+        author,
         tags: tags || [],
         difficulty,
         estimatedDuration,

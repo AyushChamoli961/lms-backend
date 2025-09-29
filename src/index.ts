@@ -46,6 +46,7 @@ app.use((req, res, next) => {
     "http://localhost:3000",
     "http://localhost:3001",
     "https://lms-main-red.vercel.app",
+    "https://lms-admin-one-cyan.vercel.app",
   ];
 
   const origin = req.headers.origin;

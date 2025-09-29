@@ -79,19 +79,22 @@ app.use(
   })
 );
 
-// Handle preflight requests explicitly
-app.options("*", (req, res) => {
-  res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
-  res.header(
-    "Access-Control-Allow-Methods",
-    "GET,POST,PUT,PATCH,DELETE,OPTIONS"
-  );
-  res.header(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, X-Requested-With, Accept, Origin"
-  );
-  res.header("Access-Control-Allow-Credentials", "true");
-  res.sendStatus(200);
+// Handle preflight requests explicitly for all routes
+app.use((req, res, next) => {
+  if (req.method === "OPTIONS") {
+    res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+    res.header(
+      "Access-Control-Allow-Methods",
+      "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+    );
+    res.header(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-Requested-With, Accept, Origin"
+    );
+    res.header("Access-Control-Allow-Credentials", "true");
+    return res.sendStatus(200);
+  }
+  next();
 });
 
 // Basic route
@@ -152,6 +155,24 @@ app.use("/api/user/wallet", requireAuth, walletRoutes);
 
 // User quiz routes (protected with unified auth)
 app.use("/api/user/quiz", requireAuth, userquizRoutes);
+
+// Handle favicon and other static file requests
+app.get("/favicon.ico", (req, res) => {
+  res.status(204).end();
+});
+
+app.get("/favicon.png", (req, res) => {
+  res.status(204).end();
+});
+
+// Catch-all route for undefined endpoints
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: "Endpoint not found",
+    path: req.path,
+  });
+});
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

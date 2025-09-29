@@ -3,7 +3,7 @@ import { db } from "../helper/db";
 import bcrypt from "bcrypt";
 import { Role, PlanStatus, EmployeeStatus } from "@prisma/client";
 import { AuthedRequest, requireOrgAdmin } from "../middleware/admin";
-
+import transporter from "../helper/nodeMailer";
 const router = Router();
 
 // Dashboard API - Get organization overview (requires org admin auth)
@@ -320,26 +320,19 @@ router.post(
       const organizationId = req.user?.organizationId;
       const userId = req.user?.id;
 
-      console.log("Request body:", req.body);
-      console.log("User from middleware:", req.user);
-
       if (!userId || !organizationId) {
         return res.status(401).json({
           success: false,
           message: "Authentication required",
         });
       }
-
       if (!email) {
         return res.status(400).json({
           success: false,
           message: "Email is required",
         });
       }
-
-      // For employee creation, we need additional data
       const { name, phone, password } = employeeData || {};
-
       if (!name || !password) {
         return res.status(400).json({
           success: false,
@@ -347,7 +340,7 @@ router.post(
         });
       }
 
-      // Check subscription limits
+      // Plan/limit checks unchanged
       const organization = await db.organization.findUnique({
         where: { id: organizationId },
         include: {
@@ -360,7 +353,6 @@ router.post(
           },
         },
       });
-
       if (!organization?.currentPlan) {
         return res.status(400).json({
           success: false,
@@ -368,7 +360,6 @@ router.post(
             "Organization must have an active subscription to add employees",
         });
       }
-
       if (
         organization.employees.length >= organization.currentPlan.employeeLimit
       ) {
@@ -378,11 +369,10 @@ router.post(
         });
       }
 
-      // Check if user already exists
+      // Check existing user
       const existingUser = await db.user.findUnique({
         where: { email },
       });
-
       if (existingUser) {
         const existingOrgUser = await db.organizationUser.findFirst({
           where: {
@@ -390,7 +380,6 @@ router.post(
             userId: existingUser.id,
           },
         });
-
         if (existingOrgUser) {
           return res.status(400).json({
             success: false,
@@ -399,17 +388,15 @@ router.post(
         }
       }
 
-      // Hash password for new employee
       const hashedPassword = await bcrypt.hash(password, 12);
 
-      // Create employee account and link to organization
-      const result = await db.$transaction(async (tx) => {
+      let result;
+      // --- USER + ORGUSER TRANSACTION FIRST -------------------
+      result = await db.$transaction(async (tx) => {
         let employee;
-
         if (existingUser) {
           employee = existingUser;
         } else {
-          // Create new user account for employee
           employee = await tx.user.create({
             data: {
               name,
@@ -417,12 +404,11 @@ router.post(
               phone,
               password: hashedPassword,
               role: role as Role,
-              isVerified: true, // Auto-verify employee accounts created by admin
+              isVerified: true,
             },
           });
         }
 
-        // Link employee to organization
         const orgEmployee = await tx.organizationUser.create({
           data: {
             organizationId,
@@ -432,7 +418,6 @@ router.post(
           },
         });
 
-        // Update subscription employee count
         await tx.subscription.update({
           where: { id: organization.currentPlan!.id },
           data: {
@@ -443,15 +428,69 @@ router.post(
         return { employee, orgEmployee };
       });
 
+      // --- EMAIL ATTEMPT OUTSIDE TRANSACTION ------------------
+     let emailSent = false;
+     let emailError: any = undefined;
+     try {
+       await transporter.sendMail({
+         from: "",
+         to: email,
+         subject: `You have been invited to join ${organization.name} on Novojuris`,
+         text: `
+Hello ${name},
+
+You have been invited to join the organization "${organization.name}" on Novojuris!
+
+You can log in with your email: ${email}
+Temporary password: ${password}
+
+Please log in and change your password after your first sign in.
+
+Click here to login: 
+
+If you have any questions, ask your organization admin.
+
+Welcome to the team!
+`,
+         html: `
+      <p>Hello <b>${name}</b>,</p>
+      <p>
+        You have been <b>invited</b> to join the organization <b>${organization.name}</b> on NovoJuris!
+      </p>
+      <p>
+        <b>Your login email:</b> ${email}<br/>
+        <b>Temporary password:</b> ${password}
+      </p>
+      <p>
+        <a href="" target="_blank" rel="noopener">Click here to log in</a> and set your own password after first sign-in.
+      </p>
+      <p>
+        If you have any questions, please ask your organization admin.
+      </p>
+      <p>Welcome to the team!</p>
+    `,
+       });
+       emailSent = true;
+     } catch (err : any) {
+       emailSent = false;
+       emailError = err?.message || String(err);
+       console.error("Invite email send error:", emailError);
+     }
+
+
       res.json({
         success: true,
-        message: "Employee account created successfully",
+        message: emailSent
+          ? "Employee account created successfully, invitation email sent"
+          : "Employee account created, but failed to send email invitation",
         data: {
           employeeId: result.employee.id,
           name: result.employee.name,
           email: result.employee.email,
           role: result.orgEmployee.role,
           status: result.orgEmployee.status,
+          emailSent,
+          ...(emailError ? { emailError } : {}),
         },
       });
     } catch (error) {
@@ -463,6 +502,7 @@ router.post(
     }
   }
 );
+
 
 // Get Employee Progress (requires org admin auth)
 router.get(

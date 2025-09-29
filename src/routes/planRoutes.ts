@@ -8,6 +8,13 @@ router.get("/", async (req: Request, res: Response) => {
   try {
     const plans = await db.plan.findMany({
       where: { isActive: true },
+      include: {
+        _count: {
+          select: {
+            subscriptions: true,
+          },
+        },
+      },
       orderBy: [{ type: "asc" }, { price: "asc" }],
     });
 
@@ -23,5 +30,7 @@ router.get("/", async (req: Request, res: Response) => {
     });
   }
 });
+
+
 
 export default router;

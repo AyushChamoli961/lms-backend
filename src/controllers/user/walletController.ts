@@ -59,6 +59,7 @@ export const getUserWallet = async (req: AuthedRequest, res: Response) => {
           amount: true,
           note: true,
           createdAt: true,
+          courseName:true
         },
         orderBy: { createdAt: "desc" },
         skip,
@@ -94,12 +95,24 @@ export const getUserWallet = async (req: AuthedRequest, res: Response) => {
       amount: transaction.amount,
       note: transaction.note,
       date: transaction.createdAt,
+      course: transaction.courseName,
       formattedDate: new Date(transaction.createdAt).toLocaleDateString(
-        "en-US",
+        "en-IN",
         {
-          day: "numeric",
-          month: "long",
-          year: "2-digit",
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        }
+      ),
+      formattedDateTime: new Date(transaction.createdAt).toLocaleString(
+        "en-IN",
+        {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
         }
       ),
     }));

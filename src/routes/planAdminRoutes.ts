@@ -56,6 +56,37 @@ router.post(
   }
 );
 
+// Get all plans for admin (including inactive ones)
+router.get(
+  "/",
+  requireAdmin([Role.SUPER_ADMIN, Role.L1_ADMIN]),
+  async (req: Request, res: Response) => {
+    try {
+      const plans = await db.plan.findMany({
+        include: {
+          _count: {
+            select: {
+              subscriptions: true,
+            },
+          },
+        },
+        orderBy: [{ type: "asc" }, { price: "asc" }],
+      });
+
+      res.json({
+        success: true,
+        data: plans,
+      });
+    } catch (error) {
+      console.error("Get admin plans error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error fetching plans",
+      });
+    }
+  }
+);
+
 // Update plan (admin only)
 router.put(
   "/:planId",

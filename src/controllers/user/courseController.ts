@@ -6,6 +6,31 @@ const prisma = new PrismaClient();
 
 // Course Discovery & Browsing
 
+// Common function to calculate total coins for courses
+const calculateTotalCoins = (courses: any[]) => {
+  return courses.map((course) => ({
+    ...course,
+    totalCoins: course.chapters.reduce((sum: number, chapter: any) => {
+      const chapterCoins = chapter.coinValue || 0;
+      // const quizCoins = chapter.quizzes
+      //   ? chapter.quizzes.reduce(
+      //       (quizSum: number, quiz: any) => quizSum + (quiz.coinValue || 0),
+      //       0
+      //     )
+      //   : 0;
+      return sum + chapterCoins;
+    }, 0),
+    // chapters: course.chapters.map(({ coinValue, ...chapter }: any) => ({
+    //   ...chapter,
+    //   quizzes: chapter.quizzes
+    //     ? chapter.quizzes.map(
+    //         ({ coinValue: quizCoinValue, ...quiz }: any) => quiz
+    //       )
+    //     : chapter.quizzes,
+    // })),
+  }));
+};
+
 export const getCourses = async (req: Request, res: Response) => {
   try {
     const {
@@ -88,6 +113,12 @@ export const getCourses = async (req: Request, res: Response) => {
             title: true,
             duration: true,
             order: true,
+            coinValue: true, // Add this to get coin values
+            quizzes: {
+              select: {
+                coinValue: true, // Add quiz coinValue
+              },
+            },
           },
           orderBy: { order: "asc" },
         },
@@ -104,11 +135,14 @@ export const getCourses = async (req: Request, res: Response) => {
       take: Number(limit),
     });
 
+    // Use the common calculateTotalCoins function
+    const coursesWithTotalCoins = calculateTotalCoins(courses);
+
     const total = await prisma.course.count({ where });
 
     res.json({
       success: true,
-      data: courses,
+      data: coursesWithTotalCoins,
       pagination: {
         page: Number(page),
         limit: Number(limit),
@@ -146,28 +180,21 @@ export const getCourseById = async (req: AuthedRequest, res: Response) => {
             title: true,
             duration: true,
             order: true,
+            coinValue: true,
             quizzes: {
-              // Remove isPublished filter to show all quizzes (like your original)
               select: {
                 id: true,
-                title: true,
-                chapterId: true,
                 coinValue: true,
-                passScore: true,
-                duration: true,
-                isPublished: true,
-                createdAt: true,
-                updatedAt: true,
                 results: {
                   where: {
                     userId,
+                    passed: true, // Only get passed results
                   },
                   select: {
                     id: true,
-                    score: true,
                     passed: true,
-                    attemptedAt: true,
                   },
+                  take: 1, // Only get one result
                 },
               },
             },
@@ -231,41 +258,28 @@ export const getCourseById = async (req: AuthedRequest, res: Response) => {
         (p) => p.chapterId === chapter.id
       );
 
-      // Transform quizzes to include completion status
-      const transformedQuizzes = chapter.quizzes.map((quiz) => {
-        const userResult = quiz.results[0] || null; // Get the latest result
+      // Transform quizzes to match the new structure
+      const transformedQuizzes = chapter.quizzes.map((quiz) => ({
+        id: quiz.id,
+        coinValue: quiz.coinValue,
+        isPassed: quiz.results.length > 0, // True if there's a passed result
+      }));
 
-        return {
-          id: quiz.id,
-          title: quiz.title,
-          chapterId: quiz.chapterId,
-          coinValue: quiz.coinValue,
-          passScore: quiz.passScore,
-          duration: quiz.duration,
-          isPublished: quiz.isPublished,
-          createdAt: quiz.createdAt,
-          updatedAt: quiz.updatedAt,
-          results: quiz.results, // Keep original results structure
-          isCompleted: userResult?.passed || false, // Only completed if passed
-          userResult: userResult
-            ? {
-                id: userResult.id,
-                score: userResult.score,
-                passed: userResult.passed,
-                attemptedAt: userResult.attemptedAt,
-              }
-            : null,
-        };
-      });
+      const isCompleted = userChapterProgress
+        ? userChapterProgress.completed
+        : false;
+      const allQuizzesPassed =
+        transformedQuizzes.length > 0
+          ? transformedQuizzes.every((quiz) => quiz.isPassed)
+          : true; // If no quizzes, consider as passed
 
       return {
         id: chapter.id,
         title: chapter.title,
         duration: chapter.duration,
         order: chapter.order,
-        isCompleted: userChapterProgress
-          ? userChapterProgress.completed
-          : false,
+        isCompleted,
+        chapterCompleted: isCompleted && allQuizzesPassed, // True when chapter is completed AND all quizzes are passed
         quizzes: transformedQuizzes,
       };
     });
@@ -286,9 +300,7 @@ export const getCourseById = async (req: AuthedRequest, res: Response) => {
       const completedQuizzes = course.chapters.reduce(
         (total, chapter) =>
           total +
-          chapter.quizzes.filter(
-            (quiz) => quiz.results.length > 0 && quiz.results[0].passed
-          ).length,
+          chapter.quizzes.filter((quiz) => quiz.results.length > 0).length,
         0
       );
 
@@ -312,6 +324,10 @@ export const getCourseById = async (req: AuthedRequest, res: Response) => {
       };
     }
 
+    // Use the common calculateTotalCoins function for a single course
+    const courseWithTotalCoins = calculateTotalCoins([course])[0];
+    const totalCoins = courseWithTotalCoins.totalCoins;
+
     res.json({
       success: true,
       data: {
@@ -319,16 +335,17 @@ export const getCourseById = async (req: AuthedRequest, res: Response) => {
         title: course.title,
         description: course.description,
         overview: course.overview,
-        thumbnail: course.thumbnail, // This was missing
+        thumbnail: course.thumbnail,
         category: course.category,
         difficulty: course.difficulty,
         tags: course.tags,
         author: course.author,
         price: course.price,
-        isPublished: course.isPublished, // This was missing
-        estimatedDuration: course.estimatedDuration, // This was missing
+        isPublished: course.isPublished,
+        estimatedDuration: course.estimatedDuration,
         createdAt: course.createdAt,
         updatedAt: course.updatedAt,
+        totalCoins, // Add total coins to the response
         chapters: transformedChapters,
         documents: course.documents,
         _count: course._count,
@@ -362,6 +379,12 @@ export const getFeaturedCourses = async (req: Request, res: Response) => {
             id: true,
             title: true,
             duration: true,
+            coinValue: true, // Add coinValue
+            quizzes: {
+              select: {
+                coinValue: true, // Add quiz coinValue
+              },
+            },
           },
         },
         _count: {
@@ -378,9 +401,11 @@ export const getFeaturedCourses = async (req: Request, res: Response) => {
       take: Number(limit),
     });
 
+    const coursesWithTotalCoins = calculateTotalCoins(courses);
+
     res.json({
       success: true,
-      data: courses,
+      data: coursesWithTotalCoins,
     });
   } catch (error) {
     console.error("Error fetching featured courses:", error);
@@ -432,6 +457,12 @@ export const searchCourses = async (req: Request, res: Response) => {
             id: true,
             title: true,
             duration: true,
+            coinValue: true, // Add coinValue
+            quizzes: {
+              select: {
+                coinValue: true, // Add quiz coinValue
+              },
+            },
           },
         },
         _count: {
@@ -445,9 +476,11 @@ export const searchCourses = async (req: Request, res: Response) => {
       take: Number(limit),
     });
 
+    const coursesWithTotalCoins = calculateTotalCoins(courses);
+
     res.json({
       success: true,
-      data: courses,
+      data: coursesWithTotalCoins,
     });
   } catch (error) {
     console.error("Error searching courses:", error);
@@ -477,6 +510,12 @@ export const getCoursesByCategory = async (req: Request, res: Response) => {
             id: true,
             title: true,
             duration: true,
+            coinValue: true, // Add coinValue
+            quizzes: {
+              select: {
+                coinValue: true, // Add quiz coinValue
+              },
+            },
           },
         },
         _count: {
@@ -494,6 +533,8 @@ export const getCoursesByCategory = async (req: Request, res: Response) => {
       take: Number(limit),
     });
 
+    const coursesWithTotalCoins = calculateTotalCoins(courses);
+
     const total = await prisma.course.count({
       where: {
         category: category as any,
@@ -503,7 +544,7 @@ export const getCoursesByCategory = async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      data: courses,
+      data: coursesWithTotalCoins,
       pagination: {
         page: Number(page),
         limit: Number(limit),

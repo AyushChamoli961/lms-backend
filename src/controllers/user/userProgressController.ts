@@ -149,6 +149,10 @@ export const markChapterAsWatched = async (
     const { chapterId } = req.params;
     const { completed = true, currentTime = 0 } = req.body;
 
+    console.log("chapterId", chapterId);
+    console.log("completed", completed);
+    console.log("currentTime", currentTime);
+
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -185,90 +189,72 @@ export const markChapterAsWatched = async (
       update: {
         currentTime: Number(currentTime),
         watchedAt: new Date(),
+        completed: true,
       },
       create: {
         userId,
         chapterId,
         currentTime: Number(currentTime),
         watchedAt: new Date(),
+        completed: true,
       },
     });
 
     // Award coins if chapter is completed and has coin value
-    let coinsAwarded = 0;
-    if (completed && chapter.coinValue > 0) {
-      // Check if this is the first time completing this chapter
-      const existingProgress = await prisma.chapterProgress.findUnique({
-        where: {
-          userId_chapterId: {
-            userId,
-            chapterId,
-          },
-        },
-      });
+    // let coinsAwarded = 0;
+    // if (completed && chapter.coinValue > 0) {
+    //   // Check if this is the first time completing this chapter
+    //   const existingProgress = await prisma.chapterProgress.findUnique({
+    //     where: {
+    //       userId_chapterId: {
+    //         userId,
+    //         chapterId,
+    //       },
+    //     },
+    //   });
 
-      if (existingProgress && !existingProgress.completed) {
-        await prisma.chapterProgress.update({
-          where: {
-            id: existingProgress.id,
-          },
-          data: {
-            completed: true,
-          },
-        });
-        // Award coins
-        await prisma.user.update({
-          where: { id: userId },
-          data: {
-            coinsEarned: {
-              increment: chapter.coinValue,
-            },
-          },
-        });
+    //     // Use database transaction to ensure data consistency
+    //     await prisma.$transaction(async (tx) => {
+    //       // Get or create wallet for the user
+    //       let wallet = await tx.wallet.findUnique({ where: { userId } });
+    //       if (!wallet) {
+    //         wallet = await tx.wallet.create({
+    //           data: {
+    //             userId,
+    //             balance: 0,
+    //           },
+    //         });
+    //       }
 
-        // Use database transaction to ensure data consistency
-        await prisma.$transaction(async (tx) => {
-          // Get or create wallet for the user
-          let wallet = await tx.wallet.findUnique({ where: { userId } });
-          if (!wallet) {
-            wallet = await tx.wallet.create({
-              data: {
-                userId,
-                balance: 0,
-              },
-            });
-          }
+    //       // Add transaction record
+    //       await tx.transaction.create({
+    //         data: {
+    //           walletId: wallet.id,
+    //           type: "EARNED",
+    //           amount: chapter.coinValue,
+    //           note: `Completed chapter: ${chapter.title}`,
+    //         },
+    //       });
 
-          // Add transaction record
-          await tx.transaction.create({
-            data: {
-              walletId: wallet.id,
-              type: "EARNED",
-              amount: chapter.coinValue,
-              note: `Completed chapter: ${chapter.title}`,
-            },
-          });
+    //       // Increment wallet balance
+    //       await tx.wallet.update({
+    //         where: { id: wallet.id },
+    //         data: {
+    //           balance: {
+    //             increment: chapter.coinValue,
+    //           },
+    //         },
+    //       });
+    //     });
 
-          // Increment wallet balance
-          await tx.wallet.update({
-            where: { id: wallet.id },
-            data: {
-              balance: {
-                increment: chapter.coinValue,
-              },
-            },
-          });
-        });
-
-        coinsAwarded = chapter.coinValue;
-      }
-    }
+    //     coinsAwarded = chapter.coinValue;
+    //   }
+    // }
 
     res.json({
       success: true,
       data: {
         progress,
-        coinsAwarded,
       },
       message: completed
         ? "Chapter marked as completed"
@@ -516,6 +502,24 @@ export const getUserCourseProgress = async (
     const quizProgressPercentage =
       totalQuizzes > 0 ? (completedQuizzes / totalQuizzes) * 100 : 0;
 
+    // Calculate total coins from chapters and quizzes
+    const totalCoinsFromChapters = course.chapters.reduce(
+      (sum, chapter) => sum + (chapter.coinValue || 0),
+      0
+    );
+
+    const totalCoinsFromQuizzes = course.chapters.reduce(
+      (sum, chapter) =>
+        sum +
+        chapter.quizzes.reduce(
+          (quizSum, quiz) => quizSum + (quiz.coinValue || 0),
+          0
+        ),
+      0
+    );
+
+    const totalCoins = totalCoinsFromChapters + totalCoinsFromQuizzes;
+
     res.json({
       success: true,
       data: {
@@ -526,6 +530,7 @@ export const getUserCourseProgress = async (
           thumbnail: course.thumbnail,
           category: course.category,
           difficulty: course.difficulty,
+          totalCoins, // Add total coins to course info
         },
         progress: {
           totalChapters,
@@ -534,6 +539,7 @@ export const getUserCourseProgress = async (
           totalQuizzes,
           completedQuizzes,
           quizProgressPercentage,
+          totalCoins, // Add total coins to progress info as well
           chapters: course.chapters.map((chapter) => ({
             id: chapter.id,
             title: chapter.title,
@@ -597,6 +603,12 @@ export const getRecentlyWatchedCourses = async (
                     id: true,
                     title: true,
                     duration: true,
+                    coinValue: true, // Add coinValue to chapters
+                    quizzes: {
+                      select: {
+                        coinValue: true, // Add coinValue to quizzes
+                      },
+                    },
                   },
                 },
               },
@@ -628,11 +640,47 @@ export const getRecentlyWatchedCourses = async (
       }
     });
 
-    const recentlyWatched = Array.from(courseMap.values()).sort(
-      (a, b) =>
-        new Date(b.lastWatchedAt).getTime() -
-        new Date(a.lastWatchedAt).getTime()
-    );
+    const recentlyWatched = Array.from(courseMap.values())
+      .map((item) => {
+        // Calculate total coins for each course
+        const totalCoinsFromChapters = item.course.chapters.reduce(
+          (sum: number, chapter: any) => sum + (chapter.coinValue || 0),
+          0
+        );
+
+        const totalCoinsFromQuizzes = item.course.chapters.reduce(
+          (sum: number, chapter: any) =>
+            sum +
+            chapter.quizzes.reduce(
+              (quizSum: number, quiz: any) => quizSum + (quiz.coinValue || 0),
+              0
+            ),
+          0
+        );
+
+        const totalCoins = totalCoinsFromChapters + totalCoinsFromQuizzes;
+
+        return {
+          ...item,
+          course: {
+            ...item.course,
+            totalCoins, // Add total coins to course
+            chapters: item.course.chapters.map(
+              ({ coinValue, ...chapter }: any) => ({
+                ...chapter,
+                quizzes: chapter.quizzes.map(
+                  ({ coinValue: quizCoinValue, ...quiz }: any) => quiz
+                ),
+              })
+            ),
+          },
+        };
+      })
+      .sort(
+        (a, b) =>
+          new Date(b.lastWatchedAt).getTime() -
+          new Date(a.lastWatchedAt).getTime()
+      );
 
     res.json({
       success: true,
@@ -646,9 +694,6 @@ export const getRecentlyWatchedCourses = async (
     });
   }
 };
-
-// Note: For bookmark functionality, you'll need to add a Bookmark model to your schema
-// For now, I'll provide a placeholder implementation
 
 export const bookmarkCourse = async (req: AuthedRequest, res: Response) => {
   try {
@@ -889,6 +934,7 @@ export const getChapterDetails = async (req: AuthedRequest, res: Response) => {
             },
           },
         },
+        summary : true
       },
     });
 
@@ -1007,11 +1053,13 @@ export const getChapterDetails = async (req: AuthedRequest, res: Response) => {
           order: chapter.order,
           coinValue: chapter.coinValue,
           documents: chapter.documents,
+          isCompleted: userProgress ? userProgress.completed : false,
           quizzes: chapter.quizzes.map((quiz) => ({
             ...quiz,
             userResult:
               quizResults.find((result) => result.quizId === quiz.id) || null,
           })),
+          summary: chapter.summary,
         },
         course: {
           id: chapter.course.id,
